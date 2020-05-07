@@ -1,0 +1,12 @@
+main: pumpFurnace.Main
+name: pumpFurnace
+version: 1.0
+author: ray
+description: Creates furnaces that pump lava from their surroundings
+api-version: 1.15
+commands:
+    pump:
+       description: Makes a furnace into a pump furnace.
+       usage: /pump while looking at a furnace.
+       permission: pumpFurnace.pump
+       permission-message: You don't have the pumpFurnace.pump permission.
