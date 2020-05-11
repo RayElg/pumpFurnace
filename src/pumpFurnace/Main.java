@@ -9,7 +9,6 @@ import java.io.ObjectOutputStream;
 import java.util.HashMap;
 import java.util.logging.Level;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -20,6 +19,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.FurnaceSmeltEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class Main extends JavaPlugin implements Listener {
@@ -33,22 +33,21 @@ public class Main extends JavaPlugin implements Listener {
 	public void onEnable() {
 		getServer().getPluginManager().registerEvents(this, this);
 		pumpFurnaces = loadPFs(); //Load in the pumpFurnaces
-		
 		pumpFurnaces.forEach((k,v) -> {v.reInit(this); v.attachMetadata();});  //Reinitialize & attach metadata to all of the pumpFurnace blocks, so we can tell that it is a pumpFurnace
 		pumpFurnaces.entrySet().removeIf(entries -> entries.getValue().f == null); //If we didn't successfully reinit furnace, remove.
 	}
-
 	@Override
 	public void onDisable() {
 		savePFs(); // Save all the PFs for next bootup
 	}
 
-	// Event handler, calls whenever an item is smelted in a furnace
+	
+	//EVENT HANDLERS
 	@EventHandler(ignoreCancelled = true)
 	public void onFurnaceSmelt(FurnaceSmeltEvent event) {
 		Furnace f = (Furnace) event.getBlock().getState();
 
-		if (f.getBurnTime() >= 1000) { // Check if the furnace has less than 1000 ticks of burntime
+		if (f.getBurnTime() >= 10000) { // Check if the furnace has less than 10000 ticks of burntime
 			return; // Exit if the furnace already has enough fuel
 		} else { // If this furnace has less than one lava bucket's worth of fuel,
 			if (f.hasMetadata("pFObject")) { // If this is a pumpfurnace
@@ -56,8 +55,7 @@ public class Main extends JavaPlugin implements Listener {
 				PumpFurnace pF = pumpFurnaces.get(loc); // Get pF
 				if (pF.extractLava()) { // Try to extract lava from surroundings
 					short burnTime = f.getBurnTime();
-					f.setBurnTime((short) (201 + burnTime)); // Add 50 ticks to the burntime
-					Bukkit.broadcastMessage("Added 50 ticks");
+					f.setBurnTime((short) (18000 + burnTime)); // Add 18000 ticks to the burntime
 					f.update();
 				} else {
 					return; // If no lava can be extracted, exit
@@ -70,19 +68,36 @@ public class Main extends JavaPlugin implements Listener {
 	public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
 		if (cmd.getName().equalsIgnoreCase("pump")) { // On /pump
 			Block b = ((Player) sender).getTargetBlock(null, 20);
-			if (b.getType() == Material.FURNACE && !b.hasMetadata("pFObject")) { // If player is looking at a non-pump
-																					// furnace
-				PumpFurnace pF = new PumpFurnace((Furnace) b.getState(), this, range);
-				pumpFurnaces.put(b.getLocation(), pF); // Add this pumpfurnace to the
-																							// list
-				pF.attachMetadata();
-				sender.sendMessage("Success! This furnace is now a pump furnace.");
-				return true;
+			if (b.getType() == Material.FURNACE && !b.hasMetadata("pFObject")) { // If player is looking at a non-pump furnace
+				if(takeIron(range * 5,(Player) sender)) { //Try to take iron from player's hand as cost for making pumpFurnace
+					PumpFurnace pF = new PumpFurnace((Furnace) b.getState(), this, range);
+					pumpFurnaces.put(b.getLocation(), pF); // Add this pumpfurnace to the list		
+					pF.attachMetadata();
+					sender.sendMessage("Success! This furnace is now a pump furnace.");
+					return true;
+				}else {
+					sender.sendMessage("Put " + (range * 5) + " iron in your hand!");
+				}
 			}
 		}
 		return false;
 	}
 
+	
+	//TAKE ITEMS FROM PLAYER HAND
+	public boolean takeIron(int num, Player p) {
+		ItemStack handItem = p.getInventory().getItemInMainHand();
+		if(handItem.getType() == Material.IRON_INGOT && handItem.getAmount() >= num) {
+			handItem.setAmount(handItem.getAmount() - num);
+			p.updateInventory();
+			return true;
+		}
+		
+		return false;
+	}
+	
+	
+	//IO
 	public void savePFs() { // Saves all pumpFurnaces for persistence
 		try {
 			File dF = this.getDataFolder(); // pumpFurnace data plugin
@@ -96,7 +111,7 @@ public class Main extends JavaPlugin implements Listener {
 			HashMap<LocationSerializable,PumpFurnace> forOut = new HashMap<LocationSerializable,PumpFurnace>(); //Version of the hashmap to save
 			
 			pumpFurnaces.forEach((K,V) -> {forOut.put(new LocationSerializable(K),V);}); //Convert pumpFurnaces to serializable version
-			
+			forOut.entrySet().removeIf(entries -> entries.getValue().l.getBlock().getType() != Material.FURNACE); //Remove entries that no longer have furnaces here
 			
 			ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(f)); // Write the hashMap
 			out.writeObject(forOut);
